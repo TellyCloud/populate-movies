@@ -13,6 +13,8 @@
   "scripts": {
     "build": "tsc",
     "clean": "del build",
+    "start": "node server.js",
+    "dev": "node server.js",
     "prebuild": "run-s clean && prisma generate",
     "pretest": "run-s build",
     "prepare": "husky install",
@@ -28,6 +30,7 @@
     "delay": "^6.0.0",
     "dequal": "^2.0.3",
     "dotenv-safe": "^8.2.0",
+    "express": "^5.1.0",
     "global-agent": "^3.0.0",
     "got": "^12.6.1",
     "isobject": "^4.0.0",
@@ -43,6 +46,7 @@
     "p-memoize": "^7.1.1",
     "p-throttle": "^5.1.0",
     "random": "^4.1.0",
+    "serverless-http": "^4.0.0",
     "wikibase-sdk": "^9.2.3"
   },
   "devDependencies": {
