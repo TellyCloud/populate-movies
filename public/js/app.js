@@ -4,6 +4,8 @@ class MovieApp {
         this.filteredMovies = [];
         this.currentPage = 1;
         this.moviesPerPage = 20;
+        this.currentCategory = 'popular';
+        this.isLoading = false;
         
         this.initializeElements();
         this.bindEvents();
@@ -17,32 +19,131 @@ class MovieApp {
         this.movieGrid = document.getElementById('movieGrid');
         this.loading = document.getElementById('loading');
         this.noResults = document.getElementById('noResults');
+        this.addCategoryButtons();
     }
 
     bindEvents() {
         this.searchInput.addEventListener('input', () => this.filterMovies());
         this.genreFilter.addEventListener('change', () => this.filterMovies());
         this.sortBy.addEventListener('change', () => this.filterMovies());
+        
+        // Add search functionality
+        let searchTimeout;
+        this.searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                if (this.searchInput.value.trim()) {
+                    this.searchMovies(this.searchInput.value.trim());
+                } else {
+                    this.loadMovies();
+                }
+            }, 500);
+        });
+    }
+
+    addCategoryButtons() {
+        const header = document.querySelector('header');
+        const categoryButtons = document.createElement('div');
+        categoryButtons.className = 'flex justify-center space-x-4 mt-4';
+        categoryButtons.innerHTML = `
+            <button id="popularBtn" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">Popular</button>
+            <button id="topRatedBtn" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">Top Rated</button>
+        `;
+        header.appendChild(categoryButtons);
+        
+        document.getElementById('popularBtn').addEventListener('click', () => this.switchCategory('popular'));
+        document.getElementById('topRatedBtn').addEventListener('click', () => this.switchCategory('top_rated'));
+    }
+
+    switchCategory(category) {
+        this.currentCategory = category;
+        
+        // Update button styles
+        document.querySelectorAll('button[id$="Btn"]').forEach(btn => {
+            btn.className = 'px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors';
+        });
+        
+        const activeBtn = category === 'popular' ? 'popularBtn' : 'topRatedBtn';
+        document.getElementById(activeBtn).className = 'px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors';
+        
+        this.loadMovies();
     }
 
     async loadMovies() {
+        if (this.isLoading) return;
+        
+        this.isLoading = true;
+        this.loading.style.display = 'block';
+        this.noResults.style.display = 'none';
+        
         try {
-            const response = await fetch('/api/movies');
+            const response = await fetch(`/api/movies?category=${this.currentCategory}&page=${this.currentPage}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch movies');
             }
             this.movies = await response.json();
             this.filteredMovies = [...this.movies];
+            this.populateGenreFilter();
             this.renderMovies();
         } catch (error) {
             console.error('Error loading movies:', error);
             this.showError('Failed to load movies. Please try again later.');
         } finally {
+            this.isLoading = false;
             this.loading.style.display = 'none';
         }
     }
 
+    async searchMovies(query) {
+        if (this.isLoading) return;
+        
+        this.isLoading = true;
+        this.loading.style.display = 'block';
+        this.noResults.style.display = 'none';
+        
+        try {
+            const response = await fetch(`/api/movies/search?q=${encodeURIComponent(query)}&page=1`);
+            if (!response.ok) {
+                throw new Error('Failed to search movies');
+            }
+            this.movies = await response.json();
+            this.filteredMovies = [...this.movies];
+            this.renderMovies();
+        } catch (error) {
+            console.error('Error searching movies:', error);
+            this.showError('Failed to search movies. Please try again later.');
+        } finally {
+            this.isLoading = false;
+            this.loading.style.display = 'none';
+        }
+    }
+
+    populateGenreFilter() {
+        const genres = new Set();
+        this.movies.forEach(movie => {
+            if (movie.genres) {
+                movie.genres.forEach(genre => genres.add(genre));
+            }
+        });
+        
+        const genreFilter = this.genreFilter;
+        // Clear existing options except "All Genres"
+        while (genreFilter.children.length > 1) {
+            genreFilter.removeChild(genreFilter.lastChild);
+        }
+        
+        // Add genre options
+        Array.from(genres).sort().forEach(genre => {
+            const option = document.createElement('option');
+            option.value = genre.toLowerCase();
+            option.textContent = genre.charAt(0).toUpperCase() + genre.slice(1);
+            genreFilter.appendChild(option);
+        });
+    }
+
     filterMovies() {
+        if (!this.movies.length) return;
+        
         const searchTerm = this.searchInput.value.toLowerCase();
         const selectedGenre = this.genreFilter.value;
         const sortBy = this.sortBy.value;
@@ -66,7 +167,7 @@ class MovieApp {
         this.filteredMovies.sort((a, b) => {
             switch (sortBy) {
                 case 'imdbRating':
-                    return (b.imdbRating || 0) - (a.imdbRating || 0);
+                    return (b.imdbRating || b.tmdbRating || 0) - (a.imdbRating || a.tmdbRating || 0);
                 case 'releaseYear':
                     return (b.releaseYear || 0) - (a.releaseYear || 0);
                 case 'title':
@@ -93,8 +194,9 @@ class MovieApp {
 
     createMovieCard(movie) {
         const posterUrl = movie.posterUrl || 'https://via.placeholder.com/300x450?text=No+Poster';
-        const imdbRating = movie.imdbRating ? movie.imdbRating.toFixed(1) : 'N/A';
-        const rtRating = movie.rtCriticRating || 'N/A';
+        const imdbRating = movie.imdbRating ? movie.imdbRating.toFixed(1) : 
+                          (movie.tmdbRating ? movie.tmdbRating.toFixed(1) : 'N/A');
+        const rtRating = movie.rtCriticRating || '';
         const year = movie.releaseYear || 'Unknown';
         const genres = movie.genres?.slice(0, 3).join(', ') || 'Unknown';
         const runtime = movie.runtime ? `${movie.runtime} min` : 'Unknown';
@@ -116,7 +218,8 @@ class MovieApp {
                     
                     <div class="flex justify-between items-center mb-3">
                         <div class="flex items-center space-x-2">
-                            <span class="text-yellow-500 font-semibold">⭐ ${imdbRating}</span>
+                            <span class="text-yellow-500 font-semibold">
+                                ${movie.imdbRating ? '⭐' : '🎬'} ${imdbRating}</span>
                             ${rtRating !== 'N/A' ? `<span class="text-red-500 font-semibold">🍅 ${rtRating}%</span>` : ''}
                         </div>
                     </div>
