@@ -13,8 +13,8 @@
   "scripts": {
     "build": "tsc",
     "clean": "del build",
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "node server.cjs",
+    "dev": "node server.cjs",
     "prebuild": "run-s clean && prisma generate",
     "pretest": "run-s build",
     "prepare": "husky install",
